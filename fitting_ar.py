@@ -49,7 +49,7 @@ def simulate_AR(N, Fs, c, seed = 1):
 	return X
 
 # Number of trials
-Trials = 1 
+Trials = 100
 # Sampling frequency
 Fs     = 200
 # Number of data points
@@ -62,7 +62,7 @@ tsim   = N/Fs
 # Coefficients of the ar model
 c = [0.7, 0.2, -0.1, -0.3]
 #c = [2.2137, -2.9403, 2.1697, -0.9606]
-c = [-0.9, -0.6, -0.5]
+#c = [-0.9, -0.6, -0.5]
 
 for T in range(Trials):
 	X[:,T] = scipy.signal.lfilter([1], -np.array([-1]+c), np.random.randn(N))#simulate_AR(N, Fs, c, seed = T*1000)
@@ -92,7 +92,7 @@ plt.legend()
 #plt.show()
 
 ########################################################################################
-# Estimating coefficients
+# Estimating coefficients via Least-Squares
 ########################################################################################
 def ARcoef(x, m):
 	N = x.shape[0]
@@ -154,10 +154,11 @@ def YuleWalker(Rxx, m):
 
 m_order = np.arange(2,30,1,dtype=int) # Model order
 akaike=[]
+sigv  = []
 for m in m_order:
 	ARyw, Sig = YuleWalker(Rxxm, m)
 	akaike.append( N*np.log(Sig) + 2*m )
-	#akaike.append(Sig)
+	sigv.append(Sig)
 '''
 sigv=[]
 for T in range(Trials):
