@@ -47,3 +47,10 @@ phi = np.matmul(np.matmul(scipy.linalg.inv(np.matmul(A.T,A)),A.T),b).T
 ########################################################################################
 # Estimating coefficients via YW equations
 ########################################################################################
+def xcorr(x,y,maxlags):
+	N = x.shape[0]
+	lags = np.arange(0,maxlags)
+	Rxx = np.zeros(lags.shape[0])
+	for k in lags:
+		Rxx[k] = np.matmul(x[0:N-k],y[k:][:,None]) / N
+	return lags, Rxx

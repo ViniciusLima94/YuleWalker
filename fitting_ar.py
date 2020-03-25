@@ -133,7 +133,6 @@ for T in range(Trials):
 	lag, Rxx[:, T] = xcorr(X[:,T],X[:,T], maxlags)
 
 Rxxm = Rxx.mean(axis=1)
-#Rxx = Rxx / Rxx.max()
 
 def YuleWalker(Rxx, m):
 
@@ -145,9 +144,6 @@ def YuleWalker(Rxx, m):
 
 	AR_yw  = np.matmul(scipy.linalg.inv(R),r)
 
-	#if order == 2:
-	#	eps_yw = b[:,None] - A*AR_yw[:,None]
-	#else:
 	eps_yw = Rxx[0] + np.sum(-AR_yw*Rxx[1:m+1])#b[:,None] - np.matmul(A, AR_yw[:,None])
 
 	return AR_yw, eps_yw
@@ -159,9 +155,3 @@ for m in m_order:
 	ARyw, Sig = YuleWalker(Rxxm, m)
 	akaike.append( N*np.log(Sig) + 2*m )
 	sigv.append(Sig)
-'''
-sigv=[]
-for T in range(Trials):
-	ARyw, sig = YuleWalker(Rxx[:,T], 3)
-	sigv.append(sig)
-'''
