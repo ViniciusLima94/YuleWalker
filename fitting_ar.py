@@ -104,7 +104,7 @@ def ARcoef(x, m):
 
 	return b, A, np.matmul(np.matmul(scipy.linalg.inv(np.matmul(A.T,A)),A.T),b)
 
-m  = 4
+m  = 2
 ARc = np.zeros([Trials, 4])
 for T in range(Trials):
 	b, A, ARc[T,:] = ARcoef(X[:,T], m)
