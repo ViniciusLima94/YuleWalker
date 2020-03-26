@@ -1,9 +1,10 @@
-##########################################################################################
-# Compute GC of AR process by solving the Yule-Walker equations
-##########################################################################################
+########################################################################################
+# COMPUTE GC FROM DATA
+########################################################################################
+import scipy.io
+import scipy.linalg
 import numpy             as np 
 import matplotlib.pyplot as plt
-import scipy.linalg
 
 ########################################################################################
 # Functions for spectral analysis and GC
@@ -30,7 +31,7 @@ def cxy(X, Y=[], f=None, Fs=1):
 		Pxx  = Xfft*np.conj(Xfft) / (N)
 		return Pxx
 
-def compute_transfer_function(AR, f):
+def compute_transfer_function(AR, sigma, f):
 
 	m     = AR.shape[0]
 	Nvars = AR.shape[1]
@@ -51,7 +52,7 @@ def compute_transfer_function(AR, f):
 		H[:,:,i] = np.linalg.inv(H[:,:,i])
 
 	for i in range(f.shape[0]):
-		S[:,:,i] = np.matmul( np.matmul(H[:,:,i], Sigma), np.conj(H[:,:,i]).T )
+		S[:,:,i] = np.matmul( np.matmul(H[:,:,i], sigma), np.conj(H[:,:,i]).T )
 
 	return H, S
 
@@ -80,14 +81,15 @@ def granger_causality(H, Z):
 		Ixy[i]  = np.log( (Hxx_tilda[i]*Z[0,0]*np.conj(Hxx_tilda[i]))*(Hyy_circf[i]*Z[1,1]*np.conj(Hyy_circf[i])/np.linalg.det(S[:,:,i])) ).real
 	
 	return Ix2y.real, Iy2x.real, Ixy.real
-
-
 ########################################################################################
 # Akaike information criteria and cross-correlations
 ########################################################################################
-def AIC(sig, m, N):
-	Nvars = sig.shape[0]
-	return 2*np.log(np.linalg.det(sig))+2*(Nvars**2)*m/N
+def AIC(sig, m, N, Nvars, T):
+	M = T*(N-m)
+	k = m*Nvars*Nvars
+	L = -(M/2)*np.log(np.linalg.det(sig))
+	aic = -2*L + 2*k*(M/(M-k-1))
+	return aic
 
 def xcorr(x,y,maxlags):
 	N = x.shape[1]
@@ -97,43 +99,27 @@ def xcorr(x,y,maxlags):
 		Rxx[k,:,:] = np.matmul(x[:,0:N-k],y[:,k:].T)/N
 	return lags, Rxx
 
-########################################################################################
-# Generate auto-regressive model
-########################################################################################
-def ARmodel(N=5000, Fs = 200, cov = None):
-	
-	T = N / Fs
+def demean(X, norm = False):
 
-	time = np.linspace(0, T, N)
+	n,m,N = X.shape
 
-	X1 = np.random.random(N)
-	X2 = np.random.random(N)
+	U     = np.ones([1, N*m])
+	Y     = np.swapaxes(X, 1,2).reshape((n, N*m))
 
-	E = np.random.multivariate_normal(np.zeros(cov.shape[0]), cov, size=(N,))
-	for t in range(2, N):
-		X1[t] = 0.55*X1[t-1] + 0.20*X2[t-1] - 0.80*X1[t-2] + 0.00*X2[t-2] + E[t,0]
-		X2[t] = 0.00*X1[t-1] + 0.55*X2[t-1] + 0.00*X1[t-2] - 0.80*X2[t-2] + E[t,1]
-		#X1[t] = 0.90*X1[t-1] + 0.00*X2[t-1] - 0.50*X1[t-2] + 0.00*X2[t-2] + E[t,0]
-		#X2[t] = 0.16*X1[t-1] + 0.80*X2[t-1] - 0.20*X1[t-2] - 0.50*X2[t-2] + E[t,1]
+	Y = Y-np.matmul(Y.mean(axis=1)[:,None], U)
+	if norm == True:
+		Y = Y / np.matmul(Y.std(axis=1)[:,None], U)
 
-	Z = np.zeros([2, N])
-
-	Z[0] = X1
-	Z[1] = X2
-
-	return Z
+	return np.swapaxes( Y.reshape([n,N,m]), 1 ,2)
 
 ########################################################################################
 # Estimate AR parameters via Yule-Walker equations
 ########################################################################################
 def YuleWalker(X, m, maxlags=100):
 
-	#X = demean(X, False)
-
 	Nvars = X.shape[0]
 	N     = X.shape[1] 
-	#Maximum number of lags for cross-correlation
-	#maxlags = 100
+
 	# Compute cross-correlations matrices for each lag
 	lag, Rxx = xcorr(X,X,maxlags)
 
@@ -159,66 +145,49 @@ def YuleWalker(X, m, maxlags=100):
 
 	return AR_yw, eps_yw
 
-
-def demean(X, norm):
-
-	n,m,N = X.shape
-
-	U     = np.ones([1, N*m])
-	Y     = np.swapaxes(X, 1,2).reshape((n, N*m))
-
-	Y = Y-np.matmul(Y.mean(axis=1)[:,None], U)
-	if norm == True:
-		Y = Y / np.matmul(Y.std(axis=1)[:,None], U)
-
-	return np.swapaxes( Y.reshape([n,N,m]), 1 ,2)
-
-N     = 10000
-Trials = 1	
-Fs    = 200
-Tsim  = N/Fs
-Nvars = 2
-cov   = np.array([ [1.00, 0.40],[0.40, 0.70] ])
-X     = np.zeros([Nvars, N, Trials])
-for T in range(Trials):
-	X[:,:,T]     = ARmodel(N = N, Fs = Fs, cov = cov)
-X = demean(X, False)
 ########################################################################################
-# Computing coefficients and covariance matrix
+# Computing GC from data
 ########################################################################################
-'''
-m_values  = np.arange(2,20,1, dtype=int)
-aic       = []
+X = scipy.io.loadmat('data.mat')['X0']
+X = demean(X)
+
+Nvars  = X.shape[0]
+N      = X.shape[1]
+Trials = X.shape[2]
+
+########################################################################################
+# Computing best order to estimate AR coefficients
+########################################################################################
+m_values = np.arange(1,31,1, dtype=int)
+
+aic   = np.zeros([m_values.shape[0]])
 for m in m_values:
-	AR, Sigma = YuleWalker(X[:,:,0], m, maxlags=100)
-	aic.append( AIC(Sigma, m, N) )
-'''
+	sigma = np.zeros([Nvars, Nvars])
+	for T in range(Trials):
+		_, aux = YuleWalker(X[:,:,T], m, maxlags=100)
+		sigma += aux / Trials
+	aic[m-1] = AIC(sigma, m, N, Nvars, Trials)
+	print('Computing model order, m = ' + str(m) + ', AIC = ' + str(aic[m-1]))
 
 
-m = 30
-AR = np.zeros([m,Nvars,Nvars])
-Sigma = np.zeros([Nvars,Nvars])
+m = m_values[np.argmin(aic)]
+AR    = np.zeros([m, Nvars, Nvars])
+sigma = np.zeros([Nvars, Nvars])
+for T in range(Trials):
+	aux1, aux2 = YuleWalker(X[:,:,T], m, maxlags=100)
+	AR    += aux1 / Trials
+	sigma += aux2 / Trials
 
-for i in range(Trials):
-	aux1, aux2 = YuleWalker(X[:,:,i], m, maxlags=200)
-	AR+=aux1 / Trials
-	Sigma+=aux2/Trials
+Fs  = 1 / (0.2e-3)
 
-########################################################################################
-# Computing spectral matrix and granger causality
-########################################################################################
 # Frequency axis
 f    = compute_freq(N, Fs) 
 # Transfer function and spectral matrix
-H, S = compute_transfer_function(AR, f)
+H, S = compute_transfer_function(AR, sigma, f)
 # Granger causalities
-Ix2y, Iy2x, Ixy = granger_causality(H, Sigma)
+Ix2y, Iy2x, Ixy = granger_causality(H, sigma)
 
-'''
-AR = np.zeros([m,Nvars,Nvars])
-Sigma = np.zeros([Nvars,Nvars])
-for i in range(40):
-	aux1, aux2 = YuleWalker(X[:,:,i], m, maxlags=200)
-	AR+=aux1 / 40
-	Sigma+=aux2/40
-'''
+plt.plot(f, Ix2y, label='X->Y')
+plt.plot(f, Iy2x, label='Y->X')
+plt.legend()
+plt.show()
