@@ -133,7 +133,7 @@ def YuleWalker(X, m, maxlags=100):
 			A[:,count] = X.T[m-i-1:N-i-1,j]
 			count      += 1
 
-	r = np.reshape( Rxx[1:m+1], (2*m,Nvars) )
+	r = np.reshape( Rxx[1:m+1], (Nvars*m,Nvars) )
 	R = np.matmul(A.T, A)/N
 
 	AR_yw  = np.matmul(scipy.linalg.inv(R).T,r).T
@@ -148,7 +148,9 @@ def YuleWalker(X, m, maxlags=100):
 ########################################################################################
 # Computing GC from data
 ########################################################################################
-X = scipy.io.loadmat('data.mat')['X0']
+X = scipy.io.loadmat('fig6.mat')['X']
+step = 20
+X = X[:,::step,:]
 X = demean(X)
 
 Nvars  = X.shape[0]
@@ -158,6 +160,47 @@ Trials = X.shape[2]
 ########################################################################################
 # Computing best order to estimate AR coefficients
 ########################################################################################
+#np.array([1, 2, 3, 4, 6, 8, 9, 13])
+ROI = np.array([0,1,2,3,5,7,8,12])
+area_names = ['V1', 'V2', 'V4', 'DP', 'MT', '8m', '5', '8l', '2', 'TEO', 'F1',
+       'STPc', '7A', '46d', '10', '9/46v', '9/46d', 'F5', 'TEpd', 'Pbr',
+       '7m', 'LIP', 'F2', '7B', 'ProM', 'STPi', 'F7', '8B', 'STPr', '24c']
+Fs  = 1 / (step*0.2e-3)
+
+count = 0
+for i in range(ROI.shape[0]):
+	for j in range(i+1, ROI.shape[0]):
+
+		X2 = np.zeros([2, N, Trials])
+		X2[0,:,:] = X[ROI[i],:,:].copy()
+		X2[1,:,:] = X[ROI[j],:,:].copy()
+
+		m = 7
+		AR    = np.zeros([m, Nvars, Nvars])
+		sigma = np.zeros([Nvars, Nvars])
+		for T in range(Trials):
+			aux1, aux2 = YuleWalker(X2[:,:,T], m, maxlags=100)
+			AR    += aux1 / Trials
+			sigma += aux2 / Trials
+
+		f    = compute_freq(N, Fs) 
+		# Transfer function and spectral matrix
+		H, S = compute_transfer_function(AR, sigma, f)
+		# Granger causalities
+		Ix2y, Iy2x, Ixy = granger_causality(H, sigma)
+
+		plt.figure()
+		plt.plot(f, Ix2y, label=area_names[ROI[i]]+'->'+area_names[ROI[j]])
+		plt.plot(f, Iy2x, label=area_names[ROI[j]]+'->'+area_names[ROI[i]])
+		plt.legend()
+		plt.xlim([0, 100])
+		a = np.max(Ix2y); b = np.max(Iy2x); c = max(a, b)
+		plt.ylim([0, max(c, 1e-3)])
+		plt.savefig('figures/'+str(count)+'.png', dpi=300)
+		plt.close()
+		count += 1
+
+'''
 m_values = np.arange(1,31,1, dtype=int)
 
 aic   = np.zeros([m_values.shape[0]])
@@ -168,9 +211,9 @@ for m in m_values:
 		sigma += aux / Trials
 	aic[m-1] = AIC(sigma, m, N, Nvars, Trials)
 	print('Computing model order, m = ' + str(m) + ', AIC = ' + str(aic[m-1]))
-
-
-m = m_values[np.argmin(aic)]
+'''
+'''
+m = 7#m_values[np.argmin(aic)]
 AR    = np.zeros([m, Nvars, Nvars])
 sigma = np.zeros([Nvars, Nvars])
 for T in range(Trials):
@@ -178,7 +221,7 @@ for T in range(Trials):
 	AR    += aux1 / Trials
 	sigma += aux2 / Trials
 
-Fs  = 1 / (0.2e-3)
+Fs  = 1 / (step*0.2e-3)
 
 # Frequency axis
 f    = compute_freq(N, Fs) 
@@ -190,4 +233,7 @@ Ix2y, Iy2x, Ixy = granger_causality(H, sigma)
 plt.plot(f, Ix2y, label='X->Y')
 plt.plot(f, Iy2x, label='Y->X')
 plt.legend()
+plt.xlim([0, 140])
+#plt.ylim([0,0.25])
 plt.show()
+'''
